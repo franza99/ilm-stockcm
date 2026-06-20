@@ -234,60 +234,87 @@
         // ข้อมูลเริ่มต้น
         let transactions = [];
 
-        // แสดงหน้าต่างโหลดข้อมูล
         function showLoading(show) {
             if(show) {
                 document.getElementById('tableBody').innerHTML = `<tr><td colspan="9" class="py-8 md:py-12 text-center text-blue-500"><i class="ph ph-spinner-gap animate-spin text-4xl md:text-5xl mx-auto mb-2 block"></i><p>กำลังโหลดข้อมูลจาก Google Sheet...</p></td></tr>`;
             }
         }
 
-        // ฟังก์ชันโหลดข้อมูลจาก Google Sheet
+        // ฟังก์ชันโหลดข้อมูลแบบมีการจับ Error อย่างละเอียด
         async function loadDataFromGoogle() {
-            if(SCRIPT_URL === 'const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx12345ABCDEFG/exec';') {
-                renderTable([]);
-                document.getElementById('tableBody').innerHTML = `<tr><td colspan="9" class="py-8 text-center text-amber-500"><i class="ph ph-warning text-4xl mb-2 block mx-auto"></i><p>ยังไม่ได้ตั้งค่าเชื่อมต่อ Google Sheet<br><span class="text-xs text-slate-500">กรุณาใส่ URL ในโค้ดบรรทัดที่กำหนด</span></p></td></tr>`;
+            if(!SCRIPT_URL || SCRIPT_URL.includes('ใส่_URL')) {
+                document.getElementById('tableBody').innerHTML = `<tr><td colspan="9" class="py-8 text-center text-amber-500"><i class="ph ph-warning text-4xl mb-2 block mx-auto"></i><p class="font-bold text-lg">ยังไม่ได้ตั้งค่าการเชื่อมต่อ Google Sheet</p><p class="text-sm text-slate-500 mt-1">กรุณานำ URL จาก Google Apps Script มาใส่ในโค้ดบรรทัดที่ 226</p></td></tr>`;
                 return;
             }
             
             showLoading(true);
             try {
                 const response = await fetch(SCRIPT_URL);
-                const data = await response.json();
+                const text = await response.text();
                 
-                // นำข้อมูลเข้าสู่ระบบ
-                transactions = data.map((item, index) => ({
-                    id: Date.now() + index,
-                    date: item.date,
-                    type: item.type,
-                    article: String(item.article),
-                    item: item.item,
-                    price: Number(item.price) || 0,
-                    qty: Number(item.qty),
-                    person: item.person,
-                    note: item.note
-                })).reverse(); // ให้ข้อมูลล่าสุดอยู่บนสุด
+                // ตรวจสอบว่าระบบถูกบล็อกให้ Login หรือไม่ (ปัญหาไม่ได้เปิด Anyone)
+                if (text.trim().startsWith('<')) {
+                    document.getElementById('tableBody').innerHTML = `
+                        <tr><td colspan="9" class="py-10 text-center text-rose-500">
+                            <i class="ph ph-lock-key text-5xl mb-3 block mx-auto"></i>
+                            <p class="font-bold text-lg">ตั้งค่าสิทธิ์ Apps Script ผิดพลาด</p>
+                            <p class="text-sm text-slate-500 mt-1 max-w-md mx-auto">ระบบถูกบล็อก! กรุณากลับไปที่ Apps Script > จัดการการทำให้ใช้งานได้ > แก้ไข<br>แล้วเปลี่ยนสิทธิ์ผู้มีสิทธิ์เข้าถึง ให้เป็น <b>"ทุกคน" (Anyone)</b> เท่านั้น</p>
+                        </td></tr>`;
+                    return;
+                }
                 
-                renderTable();
-                updateDashboard();
-                updateArticleOptions();
-                showToast('โหลดข้อมูลจาก Google Sheet สำเร็จ', 'emerald');
+                const data = JSON.parse(text);
+                
+                // ตรวจสอบ Error จากฝั่ง Sheet (เช่น หาแผ่นงานไม่เจอ)
+                if (data.error) {
+                    document.getElementById('tableBody').innerHTML = `
+                        <tr><td colspan="9" class="py-10 text-center text-rose-500">
+                            <i class="ph ph-file-dashed text-5xl mb-3 block mx-auto"></i>
+                            <p class="font-bold text-lg">เกิดข้อผิดพลาดจาก Google Sheet</p>
+                            <p class="text-sm text-slate-500 mt-1 max-w-md mx-auto">${data.error}</p>
+                        </td></tr>`;
+                    return;
+                }
+                
+                // ถังข้อมูลปกติ
+                if (Array.isArray(data)) {
+                    transactions = data.map((item, index) => ({
+                        id: Date.now() + index,
+                        date: item.date,
+                        type: item.type,
+                        article: String(item.article),
+                        item: item.item,
+                        price: Number(item.price) || 0,
+                        qty: Number(item.qty),
+                        person: item.person,
+                        note: item.note
+                    })).reverse();
+                    
+                    renderTable();
+                    updateDashboard();
+                    updateArticleOptions();
+                    showToast('โหลดข้อมูลจาก Google Sheet สำเร็จ', 'emerald');
+                }
+                
             } catch (error) {
-                console.error(error);
-                showToast('ไม่สามารถเชื่อมต่อ Google Sheet ได้', 'rose');
-                renderTable([]);
+                console.error("Fetch Error:", error);
+                document.getElementById('tableBody').innerHTML = `
+                    <tr><td colspan="9" class="py-10 text-center text-rose-500">
+                        <i class="ph ph-wifi-x text-5xl mb-3 block mx-auto"></i>
+                        <p class="font-bold text-lg">ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้</p>
+                        <p class="text-sm text-slate-500 mt-1">${error.message}<br>โปรดตรวจสอบ URL ของ Apps Script หรือการเชื่อมต่ออินเทอร์เน็ต</p>
+                    </td></tr>`;
             }
         }
 
         // เซ็ตวันที่ปัจจุบันเป็นค่าเริ่มต้นในฟอร์ม
         document.getElementById('dateInput').valueAsDate = new Date();
 
-        // ฟังก์ชันฟอร์แมตวันที่แบบย่อ
         function formatDateThai(dateString) {
             const date = new Date(dateString);
             return date.toLocaleDateString('th-TH', { year: '2-digit', month: 'short', day: 'numeric' });
         }
 
-        // ฟังก์ชันสำหรับ Render ตาราง
         function renderTable(data = transactions) {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
@@ -297,7 +324,7 @@
                     <tr>
                         <td colspan="9" class="py-8 md:py-12 text-center text-slate-400">
                             <i class="ph ph-package text-4xl md:text-5xl mx-auto mb-2 text-slate-300 block"></i>
-                            <p>ไม่พบรายการข้อมูล</p>
+                            <p>ไม่พบรายการข้อมูล (หรือยังไม่มีประวัติ)</p>
                         </td>
                     </tr>
                 `;
@@ -335,7 +362,6 @@
             });
         }
 
-        // ฟังก์ชันสำหรับอัปเดต Dashboard
         function updateDashboard() {
             let totalIn = 0;
             let totalOut = 0;
@@ -354,7 +380,6 @@
             document.getElementById('totalRemaining').innerText = (totalIn - totalOut).toLocaleString();
         }
 
-        // ฟังก์ชันสร้างตัวเลือก Autocomplete สำหรับ Article
         function updateArticleOptions() {
             const datalist = document.getElementById('articleOptions');
             datalist.innerHTML = '';
@@ -374,7 +399,6 @@
             });
         }
 
-        // แสดงชื่อสินค้าแบบ Real-time เมื่อพิมพ์รหัส
         document.getElementById('articleInput').addEventListener('input', function(e) {
             const val = e.target.value;
             const existingItem = transactions.find(t => String(t.article) === String(val) && t.item && t.item !== '-' && t.item !== 'ไม่ระบุชื่อ');
@@ -391,14 +415,12 @@
             }
         });
 
-        // จัดการเมื่อ Submit Form
         document.getElementById('transactionForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
             const typeRadio = document.querySelector('input[name="type"]:checked');
             const inputArticle = document.getElementById('articleInput').value;
             
-            // ระบบดึงชื่อสินค้าอัตโนมัติจาก Article ที่เคยมีในระบบ
             let autoItemName = '-';
             let autoPrice = 0;
             const existingItem = transactions.find(t => String(t.article) === String(inputArticle) && t.item && t.item !== '-' && t.item !== 'ไม่ระบุชื่อ');
@@ -419,21 +441,18 @@
                 note: document.getElementById('noteInput').value
             };
 
-            // อัปเดตหน้าจอทันทีเพื่อให้ผู้ใช้ไม่ต้องรอ
             transactions.unshift(newTx);
             renderTable();
             updateDashboard();
             updateArticleOptions();
 
-            // ส่งข้อมูลไปบันทึกที่ Google Sheet เบื้องหลัง
-            if(SCRIPT_URL !== 'ใส่_URL_ของคุณที่ได้จากขั้นตอนที่_3_ตรงนี้') {
-                showToast('กำลังซิงค์ข้อมูล...', 'blue');
+            if(SCRIPT_URL && !SCRIPT_URL.includes('ใส่_URL')) {
+                showToast('กำลังซิงค์ข้อมูลลงเซิร์ฟเวอร์...', 'blue');
                 
-                // ใช้โหมด no-cors (หรือ POST ปกติ) เพื่อส่งข้อมูลไป Google Apps Script
                 fetch(SCRIPT_URL, {
                     method: 'POST',
                     body: JSON.stringify(newTx),
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' } // ใช้ text/plain เลี่ยงปัญหา CORS
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
                 }).then(res => res.json())
                   .then(data => {
                       if(data.status === 'success') {
@@ -441,19 +460,16 @@
                       }
                   }).catch(err => {
                       console.error(err);
-                      // เนื่องจาก CORS policy ในเบราว์เซอร์บางตัว อาจจะฟ้อง catch แต่ข้อมูลเข้า Sheet แล้ว ให้ข้ามไป
                   });
             }
             
-            // เคลียร์ฟอร์มบางส่วน
             document.getElementById('articleInput').value = '';
             document.getElementById('qtyInput').value = '';
             document.getElementById('noteInput').value = '';
-            document.getElementById('autoItemNameDisplay').innerHTML = ''; // ล้างข้อความชื่อสินค้า
+            document.getElementById('autoItemNameDisplay').innerHTML = ''; 
             document.getElementById('articleInput').focus();
         });
 
-        // ฟังก์ชันลบรายการ
         function deleteTransaction(id) {
             if(window.confirmDialogActive) return;
             window.confirmDialogActive = true;
@@ -464,6 +480,7 @@
                 <div class="bg-white p-5 md:p-6 rounded-xl shadow-xl max-w-sm w-full mx-auto">
                     <h3 class="text-lg font-bold text-slate-900 mb-2">ยืนยันการลบ</h3>
                     <p class="text-sm text-slate-600 mb-6">คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?</p>
+                    <p class="text-xs text-rose-500 mb-4">*ข้อมูลจะถูกลบออกจากหน้าจอนี้ แต่จะไม่ลบจาก Google Sheet ต้นฉบับ</p>
                     <div class="flex justify-end gap-3">
                         <button id="cancelDelete" class="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors">ยกเลิก</button>
                         <button id="confirmDelete" class="px-4 py-2 text-sm rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-medium transition-colors">ลบรายการ</button>
@@ -481,14 +498,13 @@
                 transactions = transactions.filter(tx => tx.id !== id);
                 renderTable();
                 updateDashboard();
-                updateArticleOptions(); // อัปเดต Dropdown เผื่อรหัสถูกลบออกไป
+                updateArticleOptions(); 
                 showToast('ลบรายการสำเร็จ', 'rose');
                 document.body.removeChild(dialog);
                 window.confirmDialogActive = false;
             };
         }
 
-        // ระบบค้นหา
         document.getElementById('searchInput').addEventListener('input', function(e) {
             const searchTerm = e.target.value.toLowerCase().trim();
             const filteredData = transactions.filter(tx => 
@@ -500,7 +516,6 @@
             renderTable(filteredData);
         });
 
-        // ฟังก์ชัน Export CSV
         function exportToCSV() {
             if (transactions.length === 0) {
                 showToast('ไม่มีข้อมูลสำหรับส่งออก', 'rose');
@@ -532,7 +547,6 @@
             showToast('ส่งออกไฟล์ CSV สำเร็จ');
         }
 
-        // ฟังก์ชัน นำเข้า CSV
         function importFromCSV(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -629,7 +643,7 @@
                         transactions = [...newTransactions, ...transactions];
                         renderTable();
                         updateDashboard();
-                        updateArticleOptions(); // อัปเดต Dropdown หลังนำเข้า
+                        updateArticleOptions(); 
                         showToast(`นำเข้าข้อมูลสำเร็จ ${newTransactions.length} รายการ`, 'emerald');
                     } else {
                         showToast('ไม่พบข้อมูล หรือรูปแบบคอลัมน์ไม่ถูกต้อง', 'rose');
