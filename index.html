@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ระบบบันทึกเบิก-จ่าย สินค้า</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Sarabun', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#3b82f6',
+                        success: '#10b981',
+                        danger: '#ef4444',
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.03);
+        }
+        /* Custom scrollbar for table container */
+        .table-scroll::-webkit-scrollbar {
+            width: 4px;
+            height: 6px;
+        }
+        .table-scroll::-webkit-scrollbar-track {
+            background: #f8fafc;
+            border-radius: 4px;
+        }
+        .table-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .table-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-3 sm:p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-4 md:space-y-6">
+
+        <!-- ส่วนหัว -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+                <h1 class="text-xl md:text-3xl font-bold text-slate-900 flex items-center gap-2">
+                    <i class="ph ph-package text-blue-600 text-2xl md:text-3xl"></i>
+                    ระบบบันทึกเบิก-จ่าย สินค้าคลัง B Index Livingmall สาขา เชียงใหม่
+                </h1>
+                <p class="text-xs md:text-sm text-slate-500 mt-1">จัดการข้อมูลรับเข้าและเบิกออก</p>
+            </div>
+            <div class="flex gap-2 w-full sm:w-auto">
+                <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="importFromCSV(event)">
+                <button onclick="document.getElementById('csvFileInput').click()" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 text-sm md:text-base md:px-4 rounded-lg font-medium transition-colors shadow-sm whitespace-nowrap">
+                    <i class="ph ph-upload-simple"></i>
+                    นำเข้า CSV
+                </button>
+                <button onclick="exportToCSV()" class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-2 text-sm md:text-base md:px-4 rounded-lg font-medium transition-colors shadow-sm whitespace-nowrap">
+                    <i class="ph ph-download-simple"></i>
+                    ส่งออก CSV
+                </button>
+            </div>
+        </div>
+
+        <!-- การ์ดสรุปผล (Dashboard) -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            <div class="glass-card p-3 md:p-5 rounded-xl md:rounded-2xl flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4">
+                <div class="p-2 md:p-3 bg-emerald-50 rounded-lg md:rounded-xl">
+                    <i class="ph ph-arrow-down-left text-emerald-600 text-xl md:text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] md:text-sm font-medium text-slate-500">ยอดรับเข้ารวม</p>
+                    <p class="text-lg md:text-2xl font-bold text-slate-900" id="totalIn">0</p>
+                </div>
+            </div>
+            
+            <div class="glass-card p-3 md:p-5 rounded-xl md:rounded-2xl flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4">
+                <div class="p-2 md:p-3 bg-rose-50 rounded-lg md:rounded-xl">
+                    <i class="ph ph-arrow-up-right text-rose-600 text-xl md:text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] md:text-sm font-medium text-slate-500">ยอดเบิกออกรวม</p>
+                    <p class="text-lg md:text-2xl font-bold text-slate-900" id="totalOut">0</p>
+                </div>
+            </div>
+
+            <div class="glass-card p-3 md:p-5 rounded-xl md:rounded-2xl flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4">
+                <div class="p-2 md:p-3 bg-blue-50 rounded-lg md:rounded-xl">
+                    <i class="ph ph-file-text text-blue-600 text-xl md:text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] md:text-sm font-medium text-slate-500">จำนวนรายการ</p>
+                    <p class="text-lg md:text-2xl font-bold text-slate-900"><span id="transactionCount">0</span></p>
+                </div>
+            </div>
+
+            <div class="glass-card p-3 md:p-5 rounded-xl md:rounded-2xl flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-4">
+                <div class="p-2 md:p-3 bg-amber-50 rounded-lg md:rounded-xl">
+                    <i class="ph ph-stack text-amber-600 text-xl md:text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] md:text-sm font-medium text-slate-500">สินค้าคงเหลือทั้งหมด</p>
+                    <p class="text-lg md:text-2xl font-bold text-slate-900" id="totalRemaining">0</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6 items-start">
+            
+            <!-- ฟอร์มเพิ่มข้อมูล -->
+            <div class="lg:col-span-1 lg:sticky lg:top-4">
+                <div class="glass-card p-4 md:p-6 rounded-xl md:rounded-2xl">
+                    <h2 class="text-base md:text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+                        <i class="ph ph-plus-circle text-blue-600 text-lg md:text-xl"></i>
+                        เพิ่มรายการใหม่
+                    </h2>
+                    <form id="transactionForm" class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3 lg:grid-cols-1">
+                            <div>
+                                <label class="block text-xs md:text-sm font-medium text-slate-700 mb-1">วันที่</label>
+                                <input type="date" id="dateInput" required
+                                    class="w-full px-3 py-1.5 md:py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-xs md:text-sm font-medium text-slate-700 mb-1">ประเภท</label>
+                                <div class="grid grid-cols-2 gap-1.5">
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="type" value="in" class="peer sr-only" checked onchange="updateTypeUI()">
+                                        <div class="text-center py-1.5 md:py-2 px-2 rounded-lg border font-medium text-xs md:text-sm transition-all peer-checked:bg-emerald-50 peer-checked:border-emerald-500 peer-checked:text-emerald-700 border-slate-200 text-slate-600 hover:bg-slate-50">
+                                            รับเข้า
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="type" value="out" class="peer sr-only" onchange="updateTypeUI()">
+                                        <div class="text-center py-1.5 md:py-2 px-2 rounded-lg border font-medium text-xs md:text-sm transition-all peer-checked:bg-rose-50 peer-checked:border-rose-500 peer-checked:text-rose-700 border-slate-200 text-slate-600 hover:bg-slate-50">
+                                            เบิกออก
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs md:text-sm font-medium text-slate-700 mb-1">รหัส / Article</label>
+                            <input type="text" id="articleInput" list="articleOptions" placeholder="พิมพ์เพื่อค้นหาหรือใส่รหัส..." required
+                                class="w-full px-3 py-1.5 md:py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                            <datalist id="articleOptions"></datalist>
+                            <p id="autoItemNameDisplay" class="text-xs font-medium text-blue-600 mt-1.5 min-h-[16px] truncate"></p>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs md:text-sm font-medium text-slate-700 mb-1">จำนวน</label>
+                            <input type="number" id="qtyInput" min="1" placeholder="0" required
+                                class="w-full px-3 py-1.5 md:py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs md:text-sm font-medium text-slate-700 mb-1">ชื่อผู้เบิก / รับเข้า</label>
+                            <input type="text" id="personInput" placeholder="เช่น สมชาย, แผนก IT" required
+                                class="w-full px-3 py-1.5 md:py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs md:text-sm font-medium text-slate-700 mb-1">หมายเหตุ (ถ้ามี)</label>
+                            <textarea id="noteInput" placeholder="รายละเอียดเพิ่มเติม..." rows="1"
+                                class="w-full px-3 py-1.5 md:py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"></textarea>
+                        </div>
+
+                        <button type="submit"
+                            class="w-full py-2 md:py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm md:text-base rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm mt-2">
+                            <i class="ph ph-plus text-lg"></i>
+                            บันทึกรายการ
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ตารางแสดงข้อมูล -->
+            <div class="lg:col-span-3">
+                <div class="glass-card rounded-xl md:rounded-2xl overflow-hidden h-full flex flex-col border border-slate-200">
+                    <div class="p-3 md:p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white/50">
+                        <h2 class="text-base md:text-lg font-bold text-slate-900">ประวัติการทำรายการ</h2>
+                        <div class="relative w-full sm:w-64 md:w-80">
+                            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="searchInput" placeholder="ค้นหารหัส, ชื่อสินค้า, ผู้เบิก..." 
+                                class="w-full pl-9 pr-3 py-1.5 md:py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-xs md:text-sm transition-all">
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto flex-1 table-scroll bg-white">
+                        <table class="w-full text-left border-collapse min-w-[750px]">
+                            <thead class="bg-slate-50/90 backdrop-blur-sm shadow-sm">
+                                <tr class="text-slate-500 text-[11px] md:text-xs uppercase tracking-wider border-b border-slate-200">
+                                    <th class="py-2 px-3 md:py-3 md:px-4 font-semibold">วันที่</th>
+                                    <th class="py-2 px-3 md:py-3 md:px-4 font-semibold">ประเภท</th>
+                                    <th class="py-2 px-3 md:py-3 md:px-4 font-semibold">รหัส (Article)</th>
+                                    <th class="py-2 px-3 md:py-3 md:px-4 font-semibold">รายการสินค้า</th>
+                                    <th class="py-2 px-3 md:py-3 md:px-4 font-semibold text-right">ราคา/หน่วย</th>
+                                    <th class="py-2 px-3 md:py-3 md:px-4 font-semibold text-right">จำนวน</th>
+                                    <th class="py-2 px-3 md:py-3 md:px-4 font-semibold text-right">รวมเป็นเงิน</th>
+                                    <th class="py-2 px-3 md:py-3 md:px-4 font-semibold">ผู้ทำรายการ</th>
+                                    <th class="py-2 px-3 md:py-3 md:px-4 font-semibold text-center">ลบ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="text-xs md:text-sm">
+                                <!-- Data will be populated here by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // === นำ URL ของ Web App ที่ได้จาก Google Apps Script มาใส่ในเครื่องหมายคำพูดด้านล่าง ===
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyQiOf-nRetSgxxJtO0OC6fUa9YfzTUYkcnA5TkJSPbPFu9HF40UH_TmiRiG6n3KXiy/exec';
+        
+        // ข้อมูลเริ่มต้น
+        let transactions = [];
+
+        // แสดงหน้าต่างโหลดข้อมูล
+        function showLoading(show) {
+            if(show) {
+                document.getElementById('tableBody').innerHTML = `<tr><td colspan="9" class="py-8 md:py-12 text-center text-blue-500"><i class="ph ph-spinner-gap animate-spin text-4xl md:text-5xl mx-auto mb-2 block"></i><p>กำลังโหลดข้อมูลจาก Google Sheet...</p></td></tr>`;
+            }
+        }
+
+        // ฟังก์ชันโหลดข้อมูลจาก Google Sheet
+        async function loadDataFromGoogle() {
+            if(SCRIPT_URL === 'const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx12345ABCDEFG/exec';') {
+                renderTable([]);
+                document.getElementById('tableBody').innerHTML = `<tr><td colspan="9" class="py-8 text-center text-amber-500"><i class="ph ph-warning text-4xl mb-2 block mx-auto"></i><p>ยังไม่ได้ตั้งค่าเชื่อมต่อ Google Sheet<br><span class="text-xs text-slate-500">กรุณาใส่ URL ในโค้ดบรรทัดที่กำหนด</span></p></td></tr>`;
+                return;
+            }
+            
+            showLoading(true);
+            try {
+                const response = await fetch(SCRIPT_URL);
+                const data = await response.json();
+                
+                // นำข้อมูลเข้าสู่ระบบ
+                transactions = data.map((item, index) => ({
+                    id: Date.now() + index,
+                    date: item.date,
+                    type: item.type,
+                    article: String(item.article),
+                    item: item.item,
+                    price: Number(item.price) || 0,
+                    qty: Number(item.qty),
+                    person: item.person,
+                    note: item.note
+                })).reverse(); // ให้ข้อมูลล่าสุดอยู่บนสุด
+                
+                renderTable();
+                updateDashboard();
+                updateArticleOptions();
+                showToast('โหลดข้อมูลจาก Google Sheet สำเร็จ', 'emerald');
+            } catch (error) {
+                console.error(error);
+                showToast('ไม่สามารถเชื่อมต่อ Google Sheet ได้', 'rose');
+                renderTable([]);
+            }
+        }
+
+        // เซ็ตวันที่ปัจจุบันเป็นค่าเริ่มต้นในฟอร์ม
+        document.getElementById('dateInput').valueAsDate = new Date();
+
+        // ฟังก์ชันฟอร์แมตวันที่แบบย่อ
+        function formatDateThai(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('th-TH', { year: '2-digit', month: 'short', day: 'numeric' });
+        }
+
+        // ฟังก์ชันสำหรับ Render ตาราง
+        function renderTable(data = transactions) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="py-8 md:py-12 text-center text-slate-400">
+                            <i class="ph ph-package text-4xl md:text-5xl mx-auto mb-2 text-slate-300 block"></i>
+                            <p>ไม่พบรายการข้อมูล</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            data.forEach(tx => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
+                
+                const typeBadge = tx.type === 'in' 
+                    ? `<span class="inline-flex items-center gap-1 py-0.5 px-2 rounded-md bg-emerald-50 text-emerald-700 text-[10px] md:text-xs font-semibold"><i class="ph ph-arrow-down-left"></i> รับเข้า</span>`
+                    : `<span class="inline-flex items-center gap-1 py-0.5 px-2 rounded-md bg-rose-50 text-rose-700 text-[10px] md:text-xs font-semibold"><i class="ph ph-arrow-up-right"></i> เบิกออก</span>`;
+                
+                const price = Number(tx.price || 0);
+                const total = price * Number(tx.qty);
+                const qtyText = `<span class="font-bold ${tx.type === 'in' ? 'text-emerald-600' : 'text-rose-600'}">${tx.type === 'in' ? '+' : '-'}${tx.qty.toLocaleString()}</span>`;
+
+                tr.innerHTML = `
+                    <td class="py-2 px-3 md:py-3 md:px-4 text-slate-500 whitespace-nowrap">${formatDateThai(tx.date)}</td>
+                    <td class="py-2 px-3 md:py-3 md:px-4">${typeBadge}</td>
+                    <td class="py-2 px-3 md:py-3 md:px-4 font-medium text-slate-500">${tx.article || '-'}</td>
+                    <td class="py-2 px-3 md:py-3 md:px-4 font-medium text-slate-800 truncate max-w-[150px] md:max-w-[200px]" title="${tx.item}">${tx.item}</td>
+                    <td class="py-2 px-3 md:py-3 md:px-4 text-right text-slate-500">${price > 0 ? price.toLocaleString('th-TH', {minimumFractionDigits: 2}) : '-'}</td>
+                    <td class="py-2 px-3 md:py-3 md:px-4 text-right">${qtyText}</td>
+                    <td class="py-2 px-3 md:py-3 md:px-4 text-right font-semibold text-slate-700">${total > 0 ? total.toLocaleString('th-TH', {minimumFractionDigits: 2}) : '-'}</td>
+                    <td class="py-2 px-3 md:py-3 md:px-4 text-slate-600 truncate max-w-[100px]" title="${tx.person || ''}">${tx.person || '-'}</td>
+                    <td class="py-2 px-3 md:py-3 md:px-4 text-center">
+                         <button onclick="deleteTransaction(${tx.id})" class="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors" title="ลบรายการ">
+                            <i class="ph ph-trash text-base md:text-lg"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ฟังก์ชันสำหรับอัปเดต Dashboard
+        function updateDashboard() {
+            let totalIn = 0;
+            let totalOut = 0;
+
+            transactions.forEach(tx => {
+                if (tx.type === 'in') {
+                    totalIn += Number(tx.qty);
+                } else {
+                    totalOut += Number(tx.qty);
+                }
+            });
+
+            document.getElementById('totalIn').innerText = totalIn.toLocaleString();
+            document.getElementById('totalOut').innerText = totalOut.toLocaleString();
+            document.getElementById('transactionCount').innerText = transactions.length.toLocaleString();
+            document.getElementById('totalRemaining').innerText = (totalIn - totalOut).toLocaleString();
+        }
+
+        // ฟังก์ชันสร้างตัวเลือก Autocomplete สำหรับ Article
+        function updateArticleOptions() {
+            const datalist = document.getElementById('articleOptions');
+            datalist.innerHTML = '';
+            
+            const uniqueArticles = new Map();
+            transactions.forEach(tx => {
+                if (tx.article && tx.item && tx.item !== '-' && tx.item !== 'ไม่ระบุชื่อ' && !uniqueArticles.has(String(tx.article))) {
+                    uniqueArticles.set(String(tx.article), tx.item);
+                }
+            });
+
+            uniqueArticles.forEach((itemName, article) => {
+                const option = document.createElement('option');
+                option.value = article;
+                option.text = itemName;
+                datalist.appendChild(option);
+            });
+        }
+
+        // แสดงชื่อสินค้าแบบ Real-time เมื่อพิมพ์รหัส
+        document.getElementById('articleInput').addEventListener('input', function(e) {
+            const val = e.target.value;
+            const existingItem = transactions.find(t => String(t.article) === String(val) && t.item && t.item !== '-' && t.item !== 'ไม่ระบุชื่อ');
+            const display = document.getElementById('autoItemNameDisplay');
+            
+            if (existingItem) {
+                display.innerHTML = `<i class="ph ph-check-circle"></i> สินค้า: ${existingItem.item}`;
+                display.className = "text-xs font-medium text-emerald-600 mt-1.5 min-h-[16px] truncate";
+            } else if (val.length > 0) {
+                display.innerHTML = `<i class="ph ph-info"></i> รหัสใหม่ (ระบบจะบันทึกเป็นรายการใหม่)`;
+                display.className = "text-xs font-medium text-amber-500 mt-1.5 min-h-[16px] truncate";
+            } else {
+                display.innerHTML = "";
+            }
+        });
+
+        // จัดการเมื่อ Submit Form
+        document.getElementById('transactionForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const typeRadio = document.querySelector('input[name="type"]:checked');
+            const inputArticle = document.getElementById('articleInput').value;
+            
+            // ระบบดึงชื่อสินค้าอัตโนมัติจาก Article ที่เคยมีในระบบ
+            let autoItemName = '-';
+            let autoPrice = 0;
+            const existingItem = transactions.find(t => String(t.article) === String(inputArticle) && t.item && t.item !== '-' && t.item !== 'ไม่ระบุชื่อ');
+            if (existingItem) {
+                autoItemName = existingItem.item;
+                autoPrice = Number(existingItem.price) || 0;
+            }
+            
+            const newTx = {
+                id: Date.now(),
+                date: document.getElementById('dateInput').value,
+                type: typeRadio ? typeRadio.value : 'in',
+                article: inputArticle,
+                item: autoItemName,
+                price: autoPrice,
+                qty: Number(document.getElementById('qtyInput').value),
+                person: document.getElementById('personInput').value,
+                note: document.getElementById('noteInput').value
+            };
+
+            // อัปเดตหน้าจอทันทีเพื่อให้ผู้ใช้ไม่ต้องรอ
+            transactions.unshift(newTx);
+            renderTable();
+            updateDashboard();
+            updateArticleOptions();
+
+            // ส่งข้อมูลไปบันทึกที่ Google Sheet เบื้องหลัง
+            if(SCRIPT_URL !== 'ใส่_URL_ของคุณที่ได้จากขั้นตอนที่_3_ตรงนี้') {
+                showToast('กำลังซิงค์ข้อมูล...', 'blue');
+                
+                // ใช้โหมด no-cors (หรือ POST ปกติ) เพื่อส่งข้อมูลไป Google Apps Script
+                fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(newTx),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' } // ใช้ text/plain เลี่ยงปัญหา CORS
+                }).then(res => res.json())
+                  .then(data => {
+                      if(data.status === 'success') {
+                          showToast('บันทึกลง Google Sheet เรียบร้อย', 'emerald');
+                      }
+                  }).catch(err => {
+                      console.error(err);
+                      // เนื่องจาก CORS policy ในเบราว์เซอร์บางตัว อาจจะฟ้อง catch แต่ข้อมูลเข้า Sheet แล้ว ให้ข้ามไป
+                  });
+            }
+            
+            // เคลียร์ฟอร์มบางส่วน
+            document.getElementById('articleInput').value = '';
+            document.getElementById('qtyInput').value = '';
+            document.getElementById('noteInput').value = '';
+            document.getElementById('autoItemNameDisplay').innerHTML = ''; // ล้างข้อความชื่อสินค้า
+            document.getElementById('articleInput').focus();
+        });
+
+        // ฟังก์ชันลบรายการ
+        function deleteTransaction(id) {
+            if(window.confirmDialogActive) return;
+            window.confirmDialogActive = true;
+            
+            const dialog = document.createElement('div');
+            dialog.className = 'fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4';
+            dialog.innerHTML = `
+                <div class="bg-white p-5 md:p-6 rounded-xl shadow-xl max-w-sm w-full mx-auto">
+                    <h3 class="text-lg font-bold text-slate-900 mb-2">ยืนยันการลบ</h3>
+                    <p class="text-sm text-slate-600 mb-6">คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?</p>
+                    <div class="flex justify-end gap-3">
+                        <button id="cancelDelete" class="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100 font-medium transition-colors">ยกเลิก</button>
+                        <button id="confirmDelete" class="px-4 py-2 text-sm rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-medium transition-colors">ลบรายการ</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(dialog);
+
+            document.getElementById('cancelDelete').onclick = () => {
+                document.body.removeChild(dialog);
+                window.confirmDialogActive = false;
+            };
+
+            document.getElementById('confirmDelete').onclick = () => {
+                transactions = transactions.filter(tx => tx.id !== id);
+                renderTable();
+                updateDashboard();
+                updateArticleOptions(); // อัปเดต Dropdown เผื่อรหัสถูกลบออกไป
+                showToast('ลบรายการสำเร็จ', 'rose');
+                document.body.removeChild(dialog);
+                window.confirmDialogActive = false;
+            };
+        }
+
+        // ระบบค้นหา
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            const filteredData = transactions.filter(tx => 
+                (tx.article && String(tx.article).toLowerCase().includes(searchTerm)) ||
+                (tx.item && tx.item.toLowerCase().includes(searchTerm)) ||
+                (tx.person && tx.person.toLowerCase().includes(searchTerm)) ||
+                (tx.note && tx.note.toLowerCase().includes(searchTerm))
+            );
+            renderTable(filteredData);
+        });
+
+        // ฟังก์ชัน Export CSV
+        function exportToCSV() {
+            if (transactions.length === 0) {
+                showToast('ไม่มีข้อมูลสำหรับส่งออก', 'rose');
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "วันที่,ประเภท,รหัสสินค้า (Article),รายการสินค้า,ราคาต่อหน่วย,จำนวน,รวมเป็นเงิน,ชื่อผู้ทำรายการ,หมายเหตุ\n";
+            
+            transactions.forEach(function(tx) {
+                const typeStr = tx.type === 'in' ? 'รับเข้า' : 'เบิกออก';
+                const safeArticle = `"${(tx.article || '').replace(/"/g, '""')}"`;
+                const safeItem = `"${(tx.item || '').replace(/"/g, '""')}"`;
+                const safePerson = `"${(tx.person || '').replace(/"/g, '""')}"`;
+                const safeNote = `"${(tx.note || '').replace(/"/g, '""')}"`;
+                const total = Number(tx.price || 0) * Number(tx.qty);
+                
+                let row = `${tx.date},${typeStr},${safeArticle},${safeItem},${tx.price || 0},${tx.qty},${total},${safePerson},${safeNote}`;
+                csvContent += row + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `บันทึกเบิกจ่าย_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('ส่งออกไฟล์ CSV สำเร็จ');
+        }
+
+        // ฟังก์ชัน นำเข้า CSV
+        function importFromCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const text = e.target.result;
+                    const rows = text.split(/\r?\n/);
+                    if (rows.length === 0) return;
+
+                    const parseCSVRow = (str) => {
+                        let cols = [];
+                        let inQuotes = false;
+                        let currentVal = "";
+                        for (let char of str) {
+                            if (char === '"' && currentVal === "" && !inQuotes) {
+                                inQuotes = true;
+                            } else if (char === '"' && inQuotes) {
+                                inQuotes = false;
+                            } else if (char === ',' && !inQuotes) {
+                                cols.push(currentVal.trim());
+                                currentVal = "";
+                            } else {
+                                currentVal += char;
+                            }
+                        }
+                        cols.push(currentVal.trim());
+                        return cols;
+                    };
+
+                    const parseNumber = (val) => {
+                        if (!val) return 0;
+                        const cleaned = val.replace(/,/g, '').trim();
+                        return Number(cleaned) || 0;
+                    };
+
+                    let headerRowIdx = 0;
+                    for (let i = 0; i < Math.min(20, rows.length); i++) {
+                        if (rows[i].includes('สินค้า') || rows[i].includes('รายการ') || rows[i].includes('Article')) {
+                            headerRowIdx = i;
+                            break;
+                        }
+                    }
+
+                    const headerCols = parseCSVRow(rows[headerRowIdx]).map(h => h.toLowerCase());
+
+                    let idxDate = headerCols.findIndex(h => h.includes('วัน') || h.includes('date'));
+                    let idxType = headerCols.findIndex(h => h.includes('ประเภท') || h.includes('type'));
+                    let idxArticle = headerCols.findIndex(h => h.includes('article') || h.includes('รหัส'));
+                    let idxItem = headerCols.findIndex(h => h.includes('สินค้า') || h.includes('รายการ') || h.includes('item'));
+                    let idxPrice = headerCols.findIndex(h => h.includes('ราคา') || h.includes('price'));
+                    let idxQty = headerCols.findIndex(h => h.includes('จำนวน') || h.includes('qty') || h.includes('สต๊อก') || h.includes('คงเหลือ'));
+                    let idxPerson = headerCols.findIndex(h => h.includes('ผู้') || h.includes('ชื่อ') || h.includes('person') || h.includes('name'));
+                    let idxNote = headerCols.findIndex(h => h.includes('หมายเหตุ') || h.includes('note'));
+
+                    if(idxArticle === -1) idxArticle = 1; 
+                    if(idxItem === -1) idxItem = 2;
+                    if(idxPrice === -1) idxPrice = 3;
+                    if(idxQty === -1) idxQty = 4;
+                    if(idxDate === -1) idxDate = 0;
+                    if(idxType === -1) idxType = 1;
+                    if(idxPerson === -1) idxPerson = 6;
+                    if(idxNote === -1) idxNote = 7;
+
+                    let newTransactions = [];
+                    
+                    for (let i = headerRowIdx + 1; i < rows.length; i++) {
+                        if (!rows[i].trim()) continue;
+                        
+                        let cols = parseCSVRow(rows[i]);
+                        
+                        if (cols.length > idxItem && cols[idxItem]) {
+                            const rawType = cols[idxType] ? cols[idxType].toLowerCase() : '';
+                            const isOut = rawType.includes('เบิก') || rawType.includes('out') || rawType === '-';
+                            
+                            if (cols[idxItem].includes('อัพเดตล่าสุด') || cols[idxItem] === '') continue;
+
+                            newTransactions.push({
+                                id: Date.now() + i,
+                                date: (idxDate !== -1 && cols[idxDate]) ? cols[idxDate] : new Date().toISOString().split('T')[0],
+                                type: isOut ? 'out' : 'in',
+                                article: (idxArticle !== -1 && cols[idxArticle]) ? cols[idxArticle] : '',
+                                item: cols[idxItem] || 'ไม่ระบุชื่อ',
+                                price: parseNumber(cols[idxPrice]),
+                                qty: parseNumber(cols[idxQty]),
+                                person: (idxPerson !== -1 && cols[idxPerson]) ? cols[idxPerson] : '',
+                                note: (idxNote !== -1 && cols[idxNote]) ? cols[idxNote] : ''
+                            });
+                        }
+                    }
+
+                    if (newTransactions.length > 0) {
+                        transactions = [...newTransactions, ...transactions];
+                        renderTable();
+                        updateDashboard();
+                        updateArticleOptions(); // อัปเดต Dropdown หลังนำเข้า
+                        showToast(`นำเข้าข้อมูลสำเร็จ ${newTransactions.length} รายการ`, 'emerald');
+                    } else {
+                        showToast('ไม่พบข้อมูล หรือรูปแบบคอลัมน์ไม่ถูกต้อง', 'rose');
+                    }
+                } catch (error) {
+                    console.error(error);
+                    showToast('เกิดข้อผิดพลาดในการอ่านไฟล์', 'rose');
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function showToast(message, color = 'emerald') {
+            const toast = document.createElement('div');
+            const bgClass = color === 'emerald' ? 'bg-emerald-500' : 'bg-rose-500';
+            const icon = color === 'emerald' ? 'ph-check-circle' : 'ph-info';
+            
+            toast.className = `fixed bottom-4 right-4 left-4 sm:left-auto ${bgClass} text-white px-4 py-3 sm:px-6 sm:py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-y-10 opacity-0 z-50 text-sm sm:text-base`;
+            toast.innerHTML = `<i class="ph ${icon} text-xl"></i><span class="font-medium">${message}</span>`;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => { toast.classList.remove('translate-y-10', 'opacity-0'); }, 10);
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => { document.body.removeChild(toast); }, 300);
+            }, 3000);
+        }
+
+        function updateTypeUI() {
+            document.getElementById('articleInput').focus();
+        }
+
+        // เรียกโหลดข้อมูลตอนเปิดหน้าเว็บ
+        loadDataFromGoogle();
+
+    </script>
+</body>
+</html>
